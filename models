@@ -1,0 +1,700 @@
+# 构建2dcnn网络
+model = models.Sequential([
+    layers.Rescaling(1./255, input_shape=(img_height, img_width, 3)),
+    layers.Conv2D(16, (3, 3), activation='relu', input_shape=(img_height, img_width, 3)),  
+    layers.AveragePooling2D((2, 2)),               
+    layers.Conv2D(32, (3, 3), activation='relu'),   
+    layers.AveragePooling2D((2, 2)),               
+    layers.Dropout(0.3),  
+    layers.Conv2D(64, (3, 3), activation='relu'),   
+    layers.Dropout(0.3),  
+    layers.Flatten(),                        
+    layers.Dense(128, activation='relu'),   
+    layers.Dense(num_classes)            
+])
+
+# resnet50搭建
+def ResNet50(input_shape=[224,224,3],classes=1000):
+    
+    img_input = Input(shape=input_shape)
+    x = ZeroPadding2D((3,3))(img_input)
+    
+    x = Conv2D(64, (7, 7), strides=(2, 2), name='conv1')(x)
+    x = BatchNormalization(name='bn_conv1')(x)
+    x = Activation('relu')(x)
+    x = MaxPooling2D((3, 3), strides=(2, 2))(x)
+    
+    x =     conv_block(x, 3, [64, 64, 256], stage=2, block='a', strides=(1, 1))
+    x = identity_block(x, 3, [64, 64, 256], stage=2, block='b',)
+    x = identity_block(x, 3, [64, 64, 256], stage=2, block='c',)
+    
+    x =     conv_block(x, 3, [128, 128, 512], stage=3, block='a')
+    x = identity_block(x, 3, [128, 128, 512], stage=3, block='b')
+    x = identity_block(x, 3, [128, 128, 512], stage=3, block='c')
+    x = identity_block(x, 3, [128, 128, 512], stage=3, block='d')
+    
+    x =     conv_block(x, 3, [256, 256, 1024], stage=4, block='a')
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='b')
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='c')
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='d')
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='e')
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='f')
+    
+    x =     conv_block(x, 3, [512, 512, 2048], stage=5, block='a')
+    x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b')
+    x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c')
+    
+    x = AveragePooling2D((7, 7), name='avg_pool')(x)
+    
+    x = Flatten()(x)
+    x = Dense(classes, activation='softmax', name='fc1000')(x)
+  
+    model = Model(img_input, x, name='resnet50')
+    
+    model.load_weights("。。。。。。。。。")
+    
+    return model
+
+
+# 3.1 resnet50v2搭建
+def ResNet50V2(include_top=True,    #是否包含位于网络顶部的全连接层
+               preact=True,         #是否使用预激活
+               use_bias=True,       #是否对卷积层使用偏置
+               weights='imagenet',
+               input_tensor=None,   #可选的keras张量，用作模型的图像输入
+               input_shape=None,
+               pooling=None,
+               classes=1000,        #用于分类图像的可选类数
+               classifier_activation='softmax'): #分类层激活函数
+               
+    img_input = layers.Input(shape=input_shape)
+    x = layers.ZeroPadding2D(padding=((3, 3), (3, 3)), name='conv1_pad')(img_input)  
+    x = layers.Conv2D(64, 7, strides=2, use_bias=use_bias, name='conv1_conv')(x)
+    
+    if not preact:
+        x = layers.BatchNormalization(name='conv1_bn')(x)
+        x = layers.Activation('relu', name='conv1_relu')(x)
+        
+    x = layers.ZeroPadding2D(padding=((1, 1), (1, 1)), name='pool1_pad')(x)
+    x = layers.MaxPooling2D(3, strides=2, name='pool1_pool')(x)
+    
+    x = stack2(x, 64, 3, name='conv2')
+    x = stack2(x, 128, 3, name='conv3')
+    x = stack2(x, 256, 3, name='conv4')
+    x = stack2(x, 512, 3, stride1=1, name='conv5')
+    
+    if preact:
+        x = layers.BatchNormalization(name='post_bn')(x)
+        x = layers.Activation('relu', name='conv1_relu')(x) 
+    if include_top:
+        x = layers.GlobalAveragePooling2D(name='avg_pool')(x)  
+        x = layers.Dense(classes, activation=classifier_activation, name='predictions')(x)
+    else:
+        if pooling == 'avg':
+            x = layers.GlobalAveragePooling2D(name='avg_pool')(x)
+        elif pooling == 'max':
+            x = layers.GlobalMaxPooling2D(name='max_pool')(x)
+    
+    model = Model(img_input, x)
+    return model
+
+
+    
+    # 3.1 vgg16搭建
+    def VGG16(nb_classes, input_shape):
+        input_tensor = Input(shape=input_shape)
+        # 1st block
+        x = Conv2D(64, (3,3), activation='relu', padding='same',name='block1_conv1')(input_tensor)
+        x = Conv2D(64, (3,3), activation='relu', padding='same',name='block1_conv2')(x)
+        x = MaxPooling2D((2,2), strides=(2,2), name = 'block1_pool')(x)
+        # 2nd block
+        x = Conv2D(128, (3,3), activation='relu', padding='same',name='block2_conv1')(x)
+        x = Conv2D(128, (3,3), activation='relu', padding='same',name='block2_conv2')(x)
+        x = MaxPooling2D((2,2), strides=(2,2), name = 'block2_pool')(x)
+        # 3rd block
+        x = Conv2D(256, (3,3), activation='relu', padding='same',name='block3_conv1')(x)
+        x = Conv2D(256, (3,3), activation='relu', padding='same',name='block3_conv2')(x)
+        x = Conv2D(256, (3,3), activation='relu', padding='same',name='block3_conv3')(x)
+        x = MaxPooling2D((2,2), strides=(2,2), name = 'block3_pool')(x)
+        # 4th block
+        x = Conv2D(512, (3,3), activation='relu', padding='same',name='block4_conv1')(x)
+        x = Conv2D(512, (3,3), activation='relu', padding='same',name='block4_conv2')(x)
+        x = Conv2D(512, (3,3), activation='relu', padding='same',name='block4_conv3')(x)
+        x = MaxPooling2D((2,2), strides=(2,2), name = 'block4_pool')(x)
+        # 5th block
+        x = Conv2D(512, (3,3), activation='relu', padding='same',name='block5_conv1')(x)
+        x = Conv2D(512, (3,3), activation='relu', padding='same',name='block5_conv2')(x)
+        x = Conv2D(512, (3,3), activation='relu', padding='same',name='block5_conv3')(x)
+        x = MaxPooling2D((2,2), strides=(2,2), name = 'block5_pool')(x)
+        # full connection
+        x = Flatten()(x)
+        x = Dense(4096, activation='relu',  name='fc1')(x)
+        x = Dense(4096, activation='relu', name='fc2')(x)
+        output_tensor = Dense(nb_classes, activation='softmax', name='predictions')(x)
+    
+        model = Model(input_tensor, output_tensor)
+        return model
+    
+    
+    #构建densenet121
+    
+    class DenseNet(nn.Module):
+        def __init__(self, growth_rate=32, block_config=(6,12,24,16), init_channel=64, 
+                     bn_size=4, compression_rate=0.5, drop_rate=0, num_classes=2):
+            super(DenseNet, self).__init__()
+            
+            self.features = nn.Sequential(OrderedDict([
+                ('conv0', nn.Conv2d(3, init_channel, kernel_size=7, stride=2, padding=3, bias=False)),
+                ('norm0', nn.BatchNorm2d(init_channel)),
+                ('relu0', nn.ReLU(inplace=True)),
+                ('pool0', nn.MaxPool2d(3, stride=2, padding=1))
+            ]))
+            
+            num_features = init_channel
+            for i, num_layers in enumerate(block_config):
+                block = DenseBlock(num_layers, num_features, bn_size, growth_rate, drop_rate)
+                self.features.add_module('denseblock%d'%(i+1), block)
+                num_features += num_layers*growth_rate
+                if i != len(block_config)-1:
+                    transition = Transition(num_features, int(num_features*compression_rate))
+                    self.features.add_module('transition%d'%(i+1), transition)
+                    num_features = int(num_features*compression_rate)
+                    
+            self.features.add_module('norm5', nn.BatchNorm2d(num_features))
+            self.features.add_module('relu5', nn.ReLU(inplace=True))
+            self.classifier = nn.Linear(num_features, num_classes)
+            
+            for m in self.modules():
+                if isinstance(m, nn.Conv2d):
+                    nn.init.kaiming_normal_(m.weight)
+                elif isinstance(m, nn.BatchNorm2d):
+                    nn.init.constant_(m.bias, 0)
+                    nn.init.constant_(m.weight, 1)
+                elif isinstance(m, nn.Linear):
+                    nn.init.constant_(m.bias, 0)
+                    
+        def forward(self, x):
+            x = self.features(x)
+            x = F.avg_pool2d(x, 7, stride=1).view(x.size(0), -1)
+            x = self.classifier(x)
+            return x
+    
+    # 定义inception v1模型
+    
+    class InceptionV1(nn.Module):
+        def __init__(self, num_classes=2):
+            super(InceptionV1, self).__init__()
+            
+            self.conv1    = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3)
+            self.maxpool1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+            self.conv2    = nn.Conv2d(64, 64, kernel_size=1, stride=1, padding=0)
+            self.conv3    = nn.Conv2d(64, 192, kernel_size=3, stride=1, padding=1)
+            self.maxpool2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+            
+            self.inception3a = inception_block(192, 64, 96, 128, 16, 32, 32)  
+            self.inception3b = inception_block(256, 128, 128, 192, 32, 96, 64)
+            self.maxpool3    = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+            
+            self.inception4a = inception_block(480, 192, 96, 208, 16, 48, 64)
+            self.inception4b = inception_block(512, 160, 112, 224, 24, 64, 64)
+            self.inception4c = inception_block(512, 128, 128, 256, 24, 64, 64)
+            self.inception4d = inception_block(512, 112, 144, 288, 32, 64, 64)
+            self.inception4e = inception_block(528, 256, 160, 320, 32, 128, 128)
+            self.maxpool4    = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+            
+            self.inception5a = inception_block(832, 256, 160, 320, 32, 128, 128)
+            self.inception5b = nn.Sequential(
+                inception_block(832, 384, 192, 384, 48, 128, 128),  
+                nn.AvgPool2d(kernel_size=7, stride=1, padding=0),
+                nn.Dropout(0.4)
+            )
+            
+            self.classifier = nn.Sequential(
+                nn.Linear(in_features=1024, out_features=1024),
+                nn.ReLU(),
+                nn.Linear(in_features=1024, out_features=num_classes),
+                nn.Softmax(dim=1)
+            )
+            
+        def forward(self, x):
+            x = self.conv1(x)
+            x = F.relu(x)
+            x = self.maxpool1(x)
+            x = self.conv2(x)
+            x = F.relu(x)
+            x = self.conv3(x)
+            x = F.relu(x)
+            x = self.maxpool2(x)
+            
+            x = self.inception3a(x)
+            x = self.inception3b(x)
+            x = self.maxpool3(x)
+            
+            x = self.inception4a(x)
+            x = self.inception4b(x)
+            x = self.inception4c(x)
+            x = self.inception4d(x)
+            x = self.inception4e(x)
+            x = self.maxpool4(x)
+            
+            x = self.inception5a(x)
+            x = self.inception5b(x)
+            
+            x = torch.flatten(x, start_dim=1)
+            x = self.classifier(x)
+            
+            return x
+    
+    #定义inception v3
+    class InceptionV3(nn.Module):
+        def __init__(self, num_classes=1000, aux_logits=False, transform_input=False):
+            super(InceptionV3, self).__init__()
+            self.aux_logits = aux_logits
+            self.transform_input = transform_input
+            self.Conv2d_1a_3x3 = BasicConv2d(3, 32, kernel_size=3, stride=2)
+            self.Conv2d_2a_3x3 = BasicConv2d(32, 32, kernel_size=3)
+            self.Conv2d_2b_3x3 = BasicConv2d(32, 64, kernel_size=3, padding=1)
+            self.Conv2d_3b_1x1 = BasicConv2d(64, 80, kernel_size=1)
+            self.Conv2d_4a_3x3 = BasicConv2d(80, 192, kernel_size=3)
+            
+            self.Mixed_5b = InceptionA(192, pool_features=32)
+            self.Mixed_5c = InceptionA(256, pool_features=64)
+            self.Mixed_5d = InceptionA(288, pool_features=64)
+            self.Mixed_6a = ReductionA(288)
+            self.Mixed_6b = InceptionB(768, channels_7x7=128)
+            self.Mixed_6c = InceptionB(768, channels_7x7=160)
+            self.Mixed_6d = InceptionB(768, channels_7x7=160)
+            self.Mixed_6e = InceptionB(768, channels_7x7=192)
+            
+            if aux_logits:
+                self.AuxLogits = InceptionAux(768, num_classes)
+            self.Mixed_7a = ReductionB(768)
+            self.Mixed_7b = InceptionC(1280)
+            self.Mixed_7c = InceptionC(2048)
+            self.fc = nn.Linear(2048, num_classes)
+            
+        def forward(self, x):
+            if self.transform_input:
+                x = x.clone()
+                x[:, 0] = x[:, 0] * (0.229 / 0.5) + (0.485 - 0.5) / 0.5
+                x[:, 1] = x[:, 1] * (0.224 / 0.5) + (0.456 - 0.5) / 0.5
+                x[:, 2] = x[:, 2] * (0.225 / 0.5) + (0.406 - 0.5) / 0.5
+                
+            x = self.Conv2d_1a_3x3(x)
+            x = self.Conv2d_2a_3x3(x)
+            x = self.Conv2d_2b_3x3(x)
+            x = F.max_pool2d(x, kernel_size=3, stride=2)
+            x = self.Conv2d_3b_1x1(x)
+            x = self.Conv2d_4a_3x3(x)
+            x = F.max_pool2d(x, kernel_size=3, stride=2)
+            x = self.Mixed_5b(x)
+            x = self.Mixed_5c(x)
+            x = self.Mixed_5d(x)
+            x = self.Mixed_6a(x)
+            x = self.Mixed_6b(x)
+            x = self.Mixed_6c(x)
+            x = self.Mixed_6d(x)
+            x = self.Mixed_6e(x)
+            
+            if self.training and self.aux_logits:
+                aux = self.AuxLogits(x)
+            
+            x = self.Mixed_7a(x)
+            x = self.Mixed_7b(x)
+            x = self.Mixed_7c(x)
+            x = F.avg_pool2d(x, kernel_size=8)
+            x = F.dropout(x, training=self.training)
+            x = x.view(x.size(0), -1)
+            x = self.fc(x)
+            
+            if self.training and self.aux_logits:
+                return x, aux
+            return x
+    
+    
+    # 3.1 se模块
+     class Squeeze_excitation_layer(Layer):
+        def __init__(self, filter_sq, num_channels):
+            super().__init__()
+            self.filter_sq = filter_sq
+            self.num_channels = num_channels
+            self.avepool = tf.keras.layers.GlobalAveragePooling2D()
+            self.dense1 = tf.keras.layers.Dense(filter_sq)
+            self.relu = tf.keras.layers.Activation('relu')
+            self.dense2 = tf.keras.layers.Dense(num_channels)
+            self.sigmoid = tf.keras.layers.Activation('sigmoid')
+        def get_config(self):
+            return {'filter_sq': self.filter_sq, 'num_channels': self.num_channels}
+        
+        @classmethod
+        def from_config(cls, config):
+            return cls(**config)
+    # 创建模型
+    model = Sequential([
+        Rescaling(1./255, input_shape=(img_height, img_width, 3)),
+        Conv2D(16, (3, 3), activation='relu'),
+        AveragePooling2D((2, 2)),
+        Conv2D(32, (3, 3), activation='relu'),
+        AveragePooling2D((2, 2)),
+        Dropout(0.3),
+        
+        Squeeze_excitation_layer(filter_sq=16, num_channels=32),
+        
+        Conv2D(64, (3, 3), activation='relu'),
+        Dropout(0.3),
+        
+        Flatten(),
+        Dense(128, activation='relu'),
+        Dense(num_classes)
+    ])
+    model.summary()
+    
+    
+    #resnet50se
+    class Squeeze_excitation_layer(tf.keras.layers.Layer):
+        def __init__(self, filter_sq, num_channels):
+            super(Squeeze_excitation_layer, self).__init__()
+            self.filter_sq = filter_sq
+            self.num_channels = num_channels
+            self.avepool = tf.keras.layers.GlobalAveragePooling2D()
+            self.dense1 = tf.keras.layers.Dense(num_channels // 16, activation='relu')
+            self.dense2 = tf.keras.layers.Dense(num_channels, activation='sigmoid')
+            self.reshape = tf.keras.layers.Reshape((1, 1, num_channels))
+        def call(self, inputs):
+            squeeze = self.avepool(inputs)
+            excitation = self.dense1(squeeze)
+            excitation = self.dense2(excitation)
+            excitation = self.reshape(excitation)
+            return inputs * excitation
+    
+        @classmethod
+        def from_config(cls, config):
+            filter_sq = config['filter_sq']
+            num_channels = config['num_channels']
+            return cls(filter_sq, num_channels)
+    
+    def ResNet50_SE(input_shape=[224,224,3], classes=2):   
+        img_input = Input(shape=input_shape)
+        x = ZeroPadding2D((3,3))(img_input)   
+        x = Conv2D(64, (7, 7), strides=(2, 2), name='conv1')(x)
+        x = BatchNormalization(name='bn_conv1')(x)
+        x = Activation('relu')(x)
+        x = MaxPooling2D((3, 3), strides=(2, 2))(x)    
+        x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', strides=(1, 1))
+        x = Squeeze_excitation_layer(filter_sq=256, num_channels=256)(x)
+        x = conv_block(x, 3, [64, 64, 256], stage=2, block='b')
+        x = Squeeze_excitation_layer(filter_sq=256, num_channels=256)(x)
+        x = conv_block(x, 3, [64, 64, 256], stage=2, block='c')
+        x = Squeeze_excitation_layer(filter_sq=256, num_channels=256)(x)    
+        x = conv_block(x, 3, [128, 128, 512], stage=3, block='a')
+        x = Squeeze_excitation_layer(filter_sq=512, num_channels=512)(x)
+        x = conv_block(x, 3, [128, 128, 512], stage=3, block='b')
+        x = Squeeze_excitation_layer(filter_sq=512, num_channels=512)(x)
+        x = conv_block(x, 3, [128, 128, 512], stage=3, block='c')
+        x = Squeeze_excitation_layer(filter_sq=512, num_channels=512)(x)
+        x = conv_block(x, 3, [128, 128, 512], stage=3, block='d')
+        x = Squeeze_excitation_layer(filter_sq=512, num_channels=512)(x)        
+        x = conv_block(x, 3, [256, 256, 1024], stage=4, block='a')
+        x = Squeeze_excitation_layer(filter_sq=1024, num_channels=1024)(x)
+        x = conv_block(x, 3, [256, 256, 1024], stage=4, block='b')
+        x = Squeeze_excitation_layer(filter_sq=1024, num_channels=1024)(x)
+        x = conv_block(x, 3, [256, 256, 1024], stage=4, block='c')
+        x = Squeeze_excitation_layer(filter_sq=1024, num_channels=1024)(x)
+        x = conv_block(x, 3, [256, 256, 1024], stage=4, block='d')
+        x = Squeeze_excitation_layer(filter_sq=1024, num_channels=1024)(x)
+        x = conv_block(x, 3, [256, 256, 1024], stage=4, block='e')
+        x = Squeeze_excitation_layer(filter_sq=1024, num_channels=1024)(x)
+        x = conv_block(x, 3, [256, 256, 1024], stage=4, block='f')
+        x = Squeeze_excitation_layer(filter_sq=1024, num_channels=1024)(x)    
+        x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a')
+        x = Squeeze_excitation_layer(filter_sq=2048, num_channels=2048)(x)
+        x = conv_block(x, 3, [512, 512, 2048], stage=5, block='b')
+        x = Squeeze_excitation_layer(filter_sq=2048, num_channels=2048)(x)
+        x = conv_block(x, 3, [512, 512, 2048], stage=5, block='c')
+        x = Squeeze_excitation_layer(filter_sq=2048, num_channels=2048)(x)   
+        x = GlobalAveragePooling2D()(x)  
+        x = Flatten()(x)
+        x = Dense(classes, activation='softmax', name='fc2')(x)
+      
+        model = Model(img_input, x, name='resnet50_SE')
+
+# resnet50v2se
+class Squeeze_excitation_layer(tf.keras.layers.Layer):
+    def __init__(self, filter_sq, num_channels):
+        super(Squeeze_excitation_layer, self).__init__()
+        self.filter_sq = filter_sq
+        self.num_channels = num_channels
+        self.avepool = tf.keras.layers.GlobalAveragePooling2D()
+        self.dense1 = tf.keras.layers.Dense(num_channels // 16, activation='relu')
+        self.dense2 = tf.keras.layers.Dense(num_channels, activation='sigmoid')
+        self.reshape = tf.keras.layers.Reshape((1, 1, num_channels))
+    def call(self, inputs):
+        squeeze = self.avepool(inputs)
+        excitation = self.dense1(squeeze)
+        excitation = self.dense2(excitation)
+        excitation = self.reshape(excitation)
+        return inputs * excitation
+
+    @classmethod
+    def from_config(cls, config):
+        filter_sq = config['filter_sq']
+        num_channels = config['num_channels']
+        return cls(filter_sq, num_channels)
+
+def ResNet50V2_SE(include_top=True,    #是否包含位于网络顶部的全连接层
+                  preact=True,         #是否使用预激活
+                  use_bias=True,       #是否对卷积层使用偏置
+                  weights='imagenet',
+                  input_tensor=None,   #可选的keras张量，用作模型的图像输入
+                  input_shape=None,
+                  pooling=None,
+                  classes=1000,        #用于分类图像的可选类数
+                  classifier_activation='softmax'): #分类层激活函数
+               
+    img_input = layers.Input(shape=input_shape)
+    x = layers.ZeroPadding2D(padding=((3, 3), (3, 3)), name='conv1_pad')(img_input)  
+    x = layers.Conv2D(64, 7, strides=2, use_bias=use_bias, name='conv1_conv')(x)
+    
+    if not preact:
+        x = layers.BatchNormalization(name='conv1_bn')(x)
+        x = layers.Activation('relu', name='conv1_relu')(x)
+        
+    x = layers.ZeroPadding2D(padding=((1, 1), (1, 1)), name='pool1_pad')(x)
+    x = layers.MaxPooling2D(3, strides=2, name='pool1_pool')(x)
+    
+    x = stack2(x, 64, 3, name='conv2')
+    x = stack2(x, 128, 3, name='conv3')
+    x = stack2(x, 256, 3, name='conv4')
+    x = stack2(x, 512, 3, stride1=1, name='conv5')
+    
+    if preact:
+        x = layers.BatchNormalization(name='post_bn')(x)
+        x = layers.Activation('relu', name='conv1_relu')(x) 
+    if include_top:
+        x = layers.GlobalAveragePooling2D(name='avg_pool')(x)   
+        x = layers.Dense(classes, activation=classifier_activation, name='predictions')(x)
+    else:
+        if pooling == 'avg':
+            x = layers.GlobalAveragePooling2D(name='avg_pool')(x)
+        elif pooling == 'max':
+            x = layers.GlobalMaxPooling2D(name='max_pool')(x)
+    
+    model = Model(img_input, x)
+    return model
+    
+    # vgg16se
+    
+    def VGG16_SE(nb_classes, input_shape):
+        input_tensor = Input(shape=input_shape)
+        # 1st block
+        x = Conv2D(64, (3,3), activation='relu', padding='same',name='block1_conv1')(input_tensor)
+        x = Conv2D(64, (3,3), activation='relu', padding='same',name='block1_conv2')(x)
+        x = MaxPooling2D((2,2), strides=(2,2), name = 'block1_pool')(x)
+        x = Squeeze_excitation_layer(64, 64)(x)
+        # 2nd block
+        x = Conv2D(128, (3,3), activation='relu', padding='same',name='block2_conv1')(x)
+        x = Conv2D(128, (3,3), activation='relu', padding='same',name='block2_conv2')(x)
+        x = MaxPooling2D((2,2), strides=(2,2), name = 'block2_pool')(x)
+        x = Squeeze_excitation_layer(128, 128)(x)
+        # 3rd block
+        x = Conv2D(256, (3,3), activation='relu', padding='same',name='block3_conv1')(x)
+        x = Conv2D(256, (3,3), activation='relu', padding='same',name='block3_conv2')(x)
+        x = Conv2D(256, (3,3), activation='relu', padding='same',name='block3_conv3')(x)
+        x = MaxPooling2D((2,2), strides=(2,2), name = 'block3_pool')(x)
+        x = Squeeze_excitation_layer(256, 256)(x)
+        # 4th block
+        x = Conv2D(512, (3,3), activation='relu', padding='same',name='block4_conv1')(x)
+        x = Conv2D(512, (3,3), activation='relu', padding='same',name='block4_conv2')(x)
+        x = Conv2D(512, (3,3), activation='relu', padding='same',name='block4_conv3')(x)
+        x = MaxPooling2D((2,2), strides=(2,2), name = 'block4_pool')(x)
+        x = Squeeze_excitation_layer(512, 512)(x)
+        # 5th block
+        x = Conv2D(512, (3,3), activation='relu', padding='same',name='block5_conv1')(x)
+        x = Conv2D(512, (3,3), activation='relu', padding='same',name='block5_conv2')(x)
+        x = Conv2D(512, (3,3), activation='relu', padding='same',name='block5_conv3')(x)
+        x = MaxPooling2D((2,2), strides=(2,2), name = 'block5_pool')(x)
+        x = Squeeze_excitation_layer(512, 512)(x)
+        # full connection
+        x = Flatten()(x)
+        x = Dense(4096, activation='relu',  name='fc1')(x)
+        x = Dense(4096, activation='relu', name='fc2')(x)
+        output_tensor = Dense(nb_classes, activation='softmax', name='predictions')(x)
+    
+        model = Model(input_tensor, output_tensor)
+        return model
+    
+    
+    #densenet121se
+    class DenseNet(nn.Module):
+        def __init__(self, growth_rate=32, block_config=(6,12,24,16), init_channel=64, 
+                     bn_size=4, compression_rate=0.5, drop_rate=0, num_classes=2):
+            super(DenseNet, self).__init__()
+            self.squeeze_excitation = SqueezeExcitationLayer(filter_sq=16, num_channels=64)
+            self.features = nn.Sequential(OrderedDict([
+                ('conv0', nn.Conv2d(3, init_channel, kernel_size=7, stride=2, padding=3, bias=False)),
+                ('norm0', nn.BatchNorm2d(init_channel)),
+                ('relu0', nn.ReLU(inplace=True)),
+                ('pool0', nn.MaxPool2d(3, stride=2, padding=1))
+            ]))
+            
+            num_features = init_channel
+            for i, num_layers in enumerate(block_config):
+                block = DenseBlock(num_layers, num_features, bn_size, growth_rate, drop_rate)
+                self.features.add_module('denseblock%d'%(i+1), block)
+                num_features += num_layers*growth_rate
+                if i != len(block_config)-1:
+                    transition = Transition(num_features, int(num_features*compression_rate))
+                    self.features.add_module('transition%d'%(i+1), transition)
+                    num_features = int(num_features*compression_rate)
+                    
+            self.features.add_module('norm5', nn.BatchNorm2d(num_features))
+            self.features.add_module('relu5', nn.ReLU(inplace=True))
+            self.classifier = nn.Linear(num_features, num_classes)
+            
+            for m in self.modules():
+                if isinstance(m, nn.Conv2d):
+                    nn.init.kaiming_normal_(m.weight)
+                elif isinstance(m, nn.BatchNorm2d):
+                    nn.init.constant_(m.bias, 0)
+                    nn.init.constant_(m.weight, 1)
+                elif isinstance(m, nn.Linear):
+                    nn.init.constant_(m.bias, 0)
+                    
+        def forward(self, x):
+            x = self.features(x)
+            x = F.avg_pool2d(x, 7, stride=1).view(x.size(0), -1)
+            x = self.classifier(x)
+            return x
+    
+    #inceptionv1se
+    class inception_block(nn.Module):
+        def __init__(self, in_channels, ch1x1, ch3x3red, ch3x3, ch5x5red, ch5x5, pool_proj, filter3):
+            super(inception_block, self).__init__()
+            
+            self.branch1 = nn.Sequential(
+                nn.Conv2d(in_channels, ch1x1, kernel_size=1),
+                nn.BatchNorm2d(ch1x1),   
+                nn.ReLU(inplace=True)
+            )
+            
+            self.branch2 = nn.Sequential(
+                nn.Conv2d(in_channels, ch3x3red, kernel_size=1),
+                nn.BatchNorm2d(ch3x3red), 
+                nn.ReLU(inplace=True),
+                nn.Conv2d(ch3x3red, ch3x3, kernel_size=3, padding=1),
+                nn.BatchNorm2d(ch3x3),
+                nn.ReLU(inplace=True)
+            )
+            
+            self.branch3 = nn.Sequential(
+                nn.Conv2d(in_channels, ch5x5red, kernel_size=1),
+                nn.BatchNorm2d(ch5x5red), 
+                nn.ReLU(inplace=True),
+                nn.Conv2d(ch5x5red, ch5x5, kernel_size=5, padding=2),
+                nn.BatchNorm2d(ch5x5),
+                nn.ReLU(inplace=True)
+            )
+            
+            self.branch4 = nn.Sequential(
+                nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
+                nn.Conv2d(in_channels, pool_proj, kernel_size=1),
+                nn.BatchNorm2d(pool_proj), 
+                nn.ReLU(inplace=True)
+            )
+    
+            self.se = nn.Sequential(
+                nn.AdaptiveAvgPool2d((1,1)),
+                nn.Conv2d(ch1x1 + ch3x3 + ch5x5 + pool_proj, (ch1x1 + ch3x3 + ch5x5 + pool_proj)//16, kernel_size=1),
+                nn.ReLU(),
+                nn.Conv2d((ch1x1 + ch3x3 + ch5x5 + pool_proj)//16, ch1x1 + ch3x3 + ch5x5 + pool_proj, kernel_size=1),
+                nn.Sigmoid()
+            )        
+            
+        def forward(self, x):
+            branch1_output = self.branch1(x)
+            branch2_output = self.branch2(x)
+            branch3_output = self.branch3(x)
+            branch4_output = self.branch4(x)
+            
+            outputs = (branch1_output, branch2_output, branch3_output, branch4_output)
+            output = torch.cat(outputs, dim=1) 
+            
+            se_output = self.se(output) 
+            final_output = output * se_output  
+            return final_output
+    
+    
+    #inceptionv3se
+    class InceptionV3(nn.Module):
+        def __init__(self, num_classes=1000, aux_logits=False, transform_input=False):
+            super(InceptionV3, self).__init__()
+            
+            self.filter3 = 2048 
+            self.aux_logits = aux_logits
+            self.transform_input = transform_input
+            self.Conv2d_1a_3x3 = BasicConv2d(3, 32, kernel_size=3, stride=2)
+            self.Conv2d_2a_3x3 = BasicConv2d(32, 32, kernel_size=3)
+            self.Conv2d_2b_3x3 = BasicConv2d(32, 64, kernel_size=3, padding=1)
+            self.Conv2d_3b_1x1 = BasicConv2d(64, 80, kernel_size=1)
+            self.Conv2d_4a_3x3 = BasicConv2d(80, 192, kernel_size=3)
+            
+            self.Mixed_5b = InceptionA(192, pool_features=32)
+            self.Mixed_5c = InceptionA(256, pool_features=64)
+            self.Mixed_5d = InceptionA(288, pool_features=64)
+            self.Mixed_6a = ReductionA(288)
+            self.Mixed_6b = InceptionB(768, channels_7x7=128)
+            self.Mixed_6c = InceptionB(768, channels_7x7=160)
+            self.Mixed_6d = InceptionB(768, channels_7x7=160)
+            self.Mixed_6e = InceptionB(768, channels_7x7=192)
+            
+            if aux_logits:
+                self.AuxLogits = InceptionAux(768, num_classes)
+            self.Mixed_7a = ReductionB(768)
+            self.Mixed_7b = InceptionC(1280)
+            self.Mixed_7c = InceptionC(2048)
+            self.fc = nn.Linear(self.filter3, num_classes)
+            
+            self.se = nn.Sequential(
+                nn.AdaptiveAvgPool2d((1,1)),
+                nn.Conv2d(self.filter3, self.filter3//16, kernel_size=1),
+                nn.ReLU(),
+                nn.Conv2d(self.filter3//16, self.filter3, kernel_size=1),
+                nn.Sigmoid()
+            )
+            
+        def forward(self, x):
+            if self.transform_input:
+                x = x.clone()
+                x[:, 0] = x[:, 0] * (0.229 / 0.5) + (0.485 - 0.5) / 0.5
+                x[:, 1] = x[:, 1] * (0.224 / 0.5) + (0.456 - 0.5) / 0.5
+                x[:, 2] = x[:, 2] * (0.225 / 0.5) + (0.406 - 0.5) / 0.5
+                
+            x = self.Conv2d_1a_3x3(x)
+            x = self.Conv2d_2a_3x3(x)
+            x = self.Conv2d_2b_3x3(x)
+            x = F.max_pool2d(x, kernel_size=3, stride=2)
+            x = self.Conv2d_3b_1x1(x)
+            x = self.Conv2d_4a_3x3(x)
+            x = F.max_pool2d(x, kernel_size=3, stride=2)
+            x = self.Mixed_5b(x)
+            x = self.Mixed_5c(x)
+            x = self.Mixed_5d(x)
+            x = self.Mixed_6a(x)
+            x = self.Mixed_6b(x)
+            x = self.Mixed_6c(x)
+            x = self.Mixed_6d(x)
+            x = self.Mixed_6e(x)
+            
+            if self.training and self.aux_logits:
+                aux = self.AuxLogits(x)
+            
+            x = self.Mixed_7a(x)
+            x = self.Mixed_7b(x)
+            x = self.Mixed_7c(x)
+            x = self.se(x)
+            x = F.adaptive_avg_pool2d(x, (1, 1))
+            x = x.view(x.size(0), -1)
+            x = self.fc(x)
+            if self.training and self.aux_logits:
+                return x, aux
+            return x
